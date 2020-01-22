@@ -107,14 +107,12 @@ void AccessGranted(){
   digitalWrite(greenLed,LED_ON);
   digitalWrite(redLed,LED_OFF);
   digitalWrite(relay,HIGH);
-  Serial.println("\nAccess Granted");
   delay(3000); 
   NormalState();
 }
 
 /*-------------------------- Access Denied ------------------------------------------------*/
 void AccessDenied(){
-  Serial.println("\nAccess Denied");
   digitalWrite(greenLed,LED_OFF);
   digitalWrite(relay,LOW);
   for(uint8_t i=0; i<5;i++)
