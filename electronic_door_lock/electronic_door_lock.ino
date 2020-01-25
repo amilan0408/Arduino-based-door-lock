@@ -98,7 +98,7 @@ void loop() {
       }
      }
 
-    if(counter!=0)  //if keypad is waiting for next character, blink greenLed
+    if(counter!=0 && (millis()-keypad_timer >= 2000))  //if keypad is waiting for next character and passed more than 2 sec, blink greenLed
     {  
        if(millis()-blinking_timer >= 250){
         blinking_timer=millis();
