@@ -17,6 +17,10 @@
 
 #define KEYPAD_TIMEOUT 8000 //maximum delay between two characters
 
+/*------------------------ EEPROM --------------------------*/
+#define PSW_FLAG_ADDR 1 // Password flag at address 1
+#define PSW_DATA_ADDR 6 // Password data at addresses 6 to 11
+
 char keys[4][3] = {   
   {'1','2','3'},  
   {'4','5','6'},
@@ -30,7 +34,7 @@ byte columns[3] = {A0,A1,A2};
 Keypad input = Keypad( makeKeymap(keys), rows, columns,4, 3 );
 MFRC522 rfid(SS_PIN, RST_PIN); 
 
-char storedPassword[5]={'1','2','3','4','5'};
+char storedPassword[5];
 char password[5];   
 
 void setup() { 
@@ -39,6 +43,30 @@ void setup() {
   pinMode(button, INPUT_PULLUP);
   pinMode(wipe_button, INPUT_PULLUP);
   pinMode(relay, OUTPUT);
+
+  CheckWipeButton();
+
+    /*----------------------- Checking and defining Password in EEPROM ---------------------------------*/
+  // Check if password is defined, if not let user choose it
+  // If password is defined, EEPROM holds number 143 at address 1
+  if (EEPROM.read(PSW_FLAG_ADDR) != 143) { //if there is no defined password
+    digitalWrite(redLed,LED_ON);  //turn on leds to indicate programming mode
+    digitalWrite(greenLed,LED_ON);
+    
+    for(uint8_t j=0;j<5;j++){
+      char c=input.waitForKey();
+      digitalWrite(greenLed,LED_OFF);  //turn led off to indicate character has been entered
+      delay(60);
+      digitalWrite(greenLed,LED_ON);
+      EEPROM.write(PSW_DATA_ADDR+j,c);
+    }
+    EEPROM.write(PSW_FLAG_ADDR, 143);                  // Set password flag
+    BlinkLedFast(greenLed);
+    digitalWrite(redLed,LED_OFF);  //turn off leds 
+    digitalWrite(greenLed,LED_OFF);   
+  }
+  
+  ScanEEPROM();   //read data from EEPROM and store it to the memory
 }
 
 void loop() {
@@ -129,4 +157,76 @@ void NormalState(){
   digitalWrite(greenLed,LED_OFF);
   digitalWrite(redLed,LED_ON);
   digitalWrite(relay,LOW);
+}
+
+void CheckWipeButton(){
+    //Wipe Code - If the Button pressed while setup run (powered on) it wipes EEPROM
+    if (digitalRead(wipe_button) == LOW) {  // when button pressed pin should get low
+      bool buttonState = monitorWipeButton(10000); // Give user 10 seconds to cancel operation
+      if (buttonState == true && digitalRead(wipe_button) == LOW) {    // If button still be pressed, wipe EEPROM
+        Serial.println(F("Starting Wiping EEPROM"));
+        for (uint16_t x = 0; x < EEPROM.length(); x++) {    //Loop end of EEPROM address
+          if (EEPROM.read(x) == 0) {              
+            // do nothing, already clear, go to the next address in order to save time and reduce writes to EEPROM
+          }
+          else {
+            EEPROM.write(x, 0);       //write 0 to clear, it takes 3.3mS
+          }
+        }
+        //EEPROM successfully wiped
+        digitalWrite(redLed,LED_OFF);
+        digitalWrite(greenLed,LED_OFF);
+        BlinkLedFast(greenLed);
+      }
+      else{
+        //operation canceled
+        digitalWrite(redLed,LED_OFF);
+        digitalWrite(greenLed,LED_OFF);
+        BlinkLedFast(redLed);
+      }
+    }
+}
+
+/*----------------------------- Monitor Wipe button ------------------------*/
+bool monitorWipeButton(uint32_t interval) {
+  digitalWrite(redLed,LED_OFF);
+  digitalWrite(greenLed,LED_ON);
+  uint32_t now = (uint32_t)millis();
+  uint32_t previousMillis=(uint32_t)millis();
+  while ((uint32_t)millis() - now < interval)  {
+    // check on every half a second
+    if (((uint32_t)millis() % 500) == 0) {
+      if (digitalRead(wipe_button) != LOW)
+        return false;
+    }
+    //blink effect 
+    if((uint32_t)millis() -previousMillis>400) //change every 400ms
+    {
+      digitalWrite(redLed,!digitalRead(redLed));      // change state
+      digitalWrite(greenLed,!digitalRead(greenLed));
+      previousMillis=(uint32_t)millis();
+    }   
+  }
+  return true;
+}
+
+/*------------------------- Blink LED fast ---------------------------------------------*/
+void BlinkLedFast(uint8_t led){
+  for(uint8_t i=0;i<10;i++) //blink 10 times
+  {
+    digitalWrite(led,LED_ON);
+    delay(90);
+    digitalWrite(led,LED_OFF);
+    delay(90);
+  }
+}
+
+/*---------------------------------------- Read data from EEPROM ----------------------------------------*/
+void ScanEEPROM(){
+
+  for ( uint8_t i = 0; i < 5; i++ ) {                     // Read Password from EEPROM
+    storedPassword[i] = EEPROM.read(PSW_DATA_ADDR + i);  
+    Serial.print(storedPassword[i]);
+    
+  }
 }
